@@ -562,7 +562,7 @@ export default function ProfilePage({ authFetch, showToast }) {
                       type="file"
                       accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
                       className="form-input w-full"
-                      onChange={(e) => pickImage(e.target.files?.[0], 350, setBrandLogo)}
+                      onChange={(e) => pickImage(e.target.files?.[0], 2048, setBrandLogo)}
                     />
                     {brandLogo && (
                       <button type="button" className="btn btn-sm" onClick={() => setBrandLogo("")}>{t("common.remove")}</button>
@@ -581,7 +581,7 @@ export default function ProfilePage({ authFetch, showToast }) {
                       type="file"
                       accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/gif"
                       className="form-input w-full"
-                      onChange={(e) => pickImage(e.target.files?.[0], 100, setBrandFavicon)}
+                      onChange={(e) => pickImage(e.target.files?.[0], 512, setBrandFavicon)}
                     />
                     {brandFavicon && (
                       <button type="button" className="btn btn-sm" onClick={() => setBrandFavicon("")}>{t("common.remove")}</button>

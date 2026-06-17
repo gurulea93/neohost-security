@@ -122,7 +122,7 @@
     "telegram": "Telegram", "whitelist": "IP whitelist", "notifications": "Notifications",
     "sessions": "Active sessions", "panelName": "Panel name", "subtitle": "Subtitle (browser title)",
     "logoMode": "Logo display", "logoBoth": "Logo + text", "logoOnly": "Logo only", "textOnly": "Text only",
-    "logoUpload": "Logo (PNG, JPG, SVG — max 350 KB)", "faviconUpload": "Favicon (ICO, PNG — max 100 KB)",
+    "logoUpload": "Logo (PNG, JPG, SVG — max 2 MB)", "faviconUpload": "Favicon (ICO, PNG — max 512 KB)",
     "accent": "Accent color", "accentCustom": "Custom", "saveBranding": "Appearance saved",
     "saveAccount": "Save changes", "brandingHistory": "Change history", "noHistory": "No changes recorded.",
     "brandingDesc": "Customize panel name, logo, favicon and accent color. Changes apply immediately.",

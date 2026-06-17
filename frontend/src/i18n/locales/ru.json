@@ -122,7 +122,7 @@
     "telegram": "Telegram", "whitelist": "Белый список IP", "notifications": "Уведомления",
     "sessions": "Активные сессии", "panelName": "Название панели", "subtitle": "Подзаголовок (заголовок вкладки)",
     "logoMode": "Отображение логотипа", "logoBoth": "Логотип + текст", "logoOnly": "Только логотип", "textOnly": "Только текст",
-    "logoUpload": "Логотип (PNG, JPG, SVG — до 350 КБ)", "faviconUpload": "Favicon (ICO, PNG — до 100 КБ)",
+    "logoUpload": "Логотип (PNG, JPG, SVG — до 2 МБ)", "faviconUpload": "Favicon (ICO, PNG — до 512 КБ)",
     "accent": "Цвет акцента", "accentCustom": "Свой", "saveBranding": "Оформление сохранено",
     "saveAccount": "Сохранить изменения", "brandingHistory": "История изменений", "noHistory": "Изменений нет.",
     "brandingDesc": "Настройте название, логотип, favicon и цвет акцента. Изменения применяются сразу.",

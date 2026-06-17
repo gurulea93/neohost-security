@@ -2,6 +2,8 @@ import { exec, queryAll } from "../db/index.js";
 import { getSetting, setSetting } from "./security.js";
 
 const LOGO_MODES = new Set(["text", "logo", "both"]);
+export const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+export const MAX_FAVICON_BYTES = 512 * 1024;
 const ACCENT_PRESETS = {
   purple: "#9333ea",
   blue: "#3758F9",
@@ -14,6 +16,21 @@ const ACCENT_PRESETS = {
 
 function hex(v) {
   return /^#[0-9a-fA-F]{6}$/.test(v || "");
+}
+
+function imagePayloadBytes(data) {
+  const s = String(data || "");
+  if (!s) return 0;
+  const m = s.match(/^data:[^;]+;base64,(.+)$/s);
+  if (m) return Math.ceil(m[1].length * 3 / 4);
+  return new TextEncoder().encode(s).length;
+}
+
+function assertImageSize(data, maxBytes, label) {
+  const n = imagePayloadBytes(data);
+  if (n > maxBytes) {
+    throw new Error(`${label}: maxim ${Math.round(maxBytes / 1024)} KB (fișierul are ~${Math.round(n / 1024)} KB)`);
+  }
 }
 
 function brandingForHistory(b) {
@@ -64,12 +81,16 @@ export async function updateBranding(data, user = null) {
     out.logo_mode = m;
   }
   if ("logo_data" in data) {
-    await setSetting("branding_logo_data", String(data.logo_data || ""));
-    out.logo_data = String(data.logo_data || "");
+    const logo = String(data.logo_data || "");
+    if (logo) assertImageSize(logo, MAX_LOGO_BYTES, "Logotip");
+    await setSetting("branding_logo_data", logo);
+    out.logo_data = logo;
   }
   if ("favicon_data" in data) {
-    await setSetting("branding_favicon_data", String(data.favicon_data || ""));
-    out.favicon_data = String(data.favicon_data || "");
+    const fav = String(data.favicon_data || "");
+    if (fav) assertImageSize(fav, MAX_FAVICON_BYTES, "Favicon");
+    await setSetting("branding_favicon_data", fav);
+    out.favicon_data = fav;
   }
   if (data.clear_logo) {
     await setSetting("branding_logo_data", "");

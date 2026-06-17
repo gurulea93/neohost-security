@@ -122,7 +122,7 @@
     "telegram": "Telegram", "whitelist": "Whitelist IP", "notifications": "Notificări",
     "sessions": "Sesiuni active", "panelName": "Denumire panou", "subtitle": "Subtitlu (titlu browser)",
     "logoMode": "Afișare logo", "logoBoth": "Logotip + text", "logoOnly": "Doar logotip", "textOnly": "Doar text",
-    "logoUpload": "Logotip (PNG, JPG, SVG — max 350 KB)", "faviconUpload": "Favicon (ICO, PNG — max 100 KB)",
+    "logoUpload": "Logotip (PNG, JPG, SVG — max 2 MB)", "faviconUpload": "Favicon (ICO, PNG — max 512 KB)",
     "accent": "Culoare accent", "accentCustom": "Personalizată", "saveBranding": "Aspect panou salvat",
     "saveAccount": "Salvează modificările", "brandingHistory": "Istoric modificări", "noHistory": "Nicio modificare înregistrată.",
     "brandingDesc": "Personalizați denumirea, logo-ul, favicon-ul și culoarea accent. Modificările se aplică imediat.",
