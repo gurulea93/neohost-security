@@ -115,7 +115,10 @@
     "advancedToken": "Вход по API-токену (расширенный)",
     "usePassword": "Вход по логину и паролю",
     "2faTelegramHint": " — проверьте Telegram.",
-    "2faTotpHint": " — введите код из приложения Authenticator.",
+    "2faTotpHint": " — откройте Google Authenticator.",
+    "resend2fa": "Отправить код снова в Telegram",
+    "resending": "Повторная отправка…",
+    "resendFailed": "Не удалось отправить код повторно",
     "loginFailed": "Ошибка входа"
   },
   "profile": {

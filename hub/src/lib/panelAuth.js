@@ -2,9 +2,9 @@ import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { authenticator } from "otplib";
 import { config } from "../config.js";
-import { exec, queryAll, queryOne, isDbExpired } from "../db/index.js";
+import { exec, queryAll, queryOne, getDb, nowIso } from "../db/index.js";
 
-export const CHALLENGE_MINUTES = 5;
+export const CHALLENGE_MINUTES = 10;
 
 function isoAfterHours(h) {
   return new Date(Date.now() + h * 3600 * 1000).toISOString();
@@ -32,7 +32,13 @@ export async function ensureDefaultAdmin() {
 }
 
 export async function cleanupExpiredAuth() {
-  const now = new Date().toISOString();
+  const db = getDb();
+  if (db.dialect === "mysql") {
+    await exec("DELETE FROM panel_sessions WHERE expires_at < NOW()", []);
+    await exec("DELETE FROM two_fa_challenges WHERE expires_at < NOW()", []);
+    return;
+  }
+  const now = nowIso();
   await exec("DELETE FROM panel_sessions WHERE expires_at < ?", [now]);
   await exec("DELETE FROM two_fa_challenges WHERE expires_at < ?", [now]);
 }
@@ -40,21 +46,35 @@ export async function cleanupExpiredAuth() {
 export async function createPanelSession(userId, ip = "", userAgent = "") {
   await cleanupExpiredAuth();
   const token = randomBytes(32).toString("base64url");
+  const db = getDb();
+  if (db.dialect === "mysql") {
+    await exec(
+      "INSERT INTO panel_sessions (token, user_id, expires_at, created_at, ip_address, user_agent) VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? HOUR), NOW(), ?, ?)",
+      [token, userId, config.panelSessionHours, String(ip || "").slice(0, 45), String(userAgent || "").slice(0, 512)]
+    );
+    const row = await queryOne("SELECT expires_at FROM panel_sessions WHERE token = ?", [token]);
+    return { token, expires: row?.expires_at };
+  }
   const expires = isoAfterHours(config.panelSessionHours);
   await exec(
     "INSERT INTO panel_sessions (token, user_id, expires_at, created_at, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?)",
-    [token, userId, expires, new Date().toISOString(), String(ip || "").slice(0, 45), String(userAgent || "").slice(0, 512)]
+    [token, userId, expires, nowIso(), String(ip || "").slice(0, 45), String(userAgent || "").slice(0, 512)]
   );
   return { token, expires };
 }
 
 export async function getPanelSession(token) {
   if (!token) return null;
-  const now = new Date().toISOString();
-  const row = await queryOne(
-    "SELECT u.* FROM panel_sessions s JOIN panel_users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at >= ? AND u.is_active = 1",
-    [token, now]
-  );
+  const db = getDb();
+  const row = db.dialect === "mysql"
+    ? await queryOne(
+      "SELECT u.* FROM panel_sessions s JOIN panel_users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at >= NOW() AND u.is_active = 1",
+      [token]
+    )
+    : await queryOne(
+      "SELECT u.* FROM panel_sessions s JOIN panel_users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at >= ? AND u.is_active = 1",
+      [token, new Date().toISOString()]
+    );
   return row || null;
 }
 
@@ -65,8 +85,11 @@ export async function revokePanelSession(token) {
 
 export async function listUserSessions(userId) {
   await cleanupExpiredAuth();
-  const now = new Date().toISOString();
-  return queryAll("SELECT * FROM panel_sessions WHERE user_id = ? AND expires_at >= ? ORDER BY created_at DESC", [userId, now]);
+  const db = getDb();
+  if (db.dialect === "mysql") {
+    return queryAll("SELECT * FROM panel_sessions WHERE user_id = ? AND expires_at >= NOW() ORDER BY created_at DESC", [userId]);
+  }
+  return queryAll("SELECT * FROM panel_sessions WHERE user_id = ? AND expires_at >= ? ORDER BY created_at DESC", [userId, new Date().toISOString()]);
 }
 
 export async function revokeSessionToken(userId, token) {
@@ -89,18 +112,43 @@ export async function create2faChallenge(user, method, purpose = "login", code =
   await cleanupExpiredAuth();
   const token = randomBytes(24).toString("base64url");
   const finalCode = method === "telegram" && !code ? String(Math.floor(100000 + Math.random() * 900000)) : String(code || "");
+  const db = getDb();
+  if (db.dialect === "mysql") {
+    await exec(
+      "INSERT INTO two_fa_challenges (token, user_id, code, method, purpose, expires_at, created_at) VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE), NOW())",
+      [token, user.id, finalCode, method, purpose, CHALLENGE_MINUTES]
+    );
+    const row = await queryOne("SELECT expires_at FROM two_fa_challenges WHERE token = ?", [token]);
+    return { token, code: finalCode, expires: row?.expires_at };
+  }
   const expires = isoAfterMinutes(CHALLENGE_MINUTES);
   await exec(
     "INSERT INTO two_fa_challenges (token, user_id, code, method, purpose, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [token, user.id, finalCode, method, purpose, expires, new Date().toISOString()]
+    [token, user.id, finalCode, method, purpose, expires, nowIso()]
   );
   return { token, code: finalCode, expires };
 }
 
-export async function verify2faChallenge(challengeToken, user, code, method = null) {
-  const row = await queryOne("SELECT * FROM two_fa_challenges WHERE token = ? AND user_id = ?", [challengeToken, user.id]);
+export async function find2faChallenge(challengeToken, userId, purpose = null) {
+  const db = getDb();
+  const params = [challengeToken, userId];
+  let sql = "SELECT * FROM two_fa_challenges WHERE token = ? AND user_id = ?";
+  if (purpose) {
+    sql += " AND purpose = ?";
+    params.push(purpose);
+  }
+  if (db.dialect === "mysql") {
+    sql += " AND expires_at >= NOW()";
+  } else {
+    sql += " AND expires_at >= ?";
+    params.push(new Date().toISOString());
+  }
+  return queryOne(sql, params);
+}
+
+export async function verify2faChallenge(challengeToken, user, code, method = null, purpose = null) {
+  const row = await find2faChallenge(challengeToken, user.id, purpose);
   if (!row) return false;
-  if (isDbExpired(row.expires_at)) return false;
   const useMethod = method || row.method;
   if (row.method !== useMethod) return false;
   const entered = String(code || "").trim().replaceAll(" ", "");

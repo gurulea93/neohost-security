@@ -115,7 +115,10 @@
     "advancedToken": "Sign in with API token (advanced)",
     "usePassword": "Sign in with username and password",
     "2faTelegramHint": " — check Telegram.",
-    "2faTotpHint": " — enter the code from your authenticator app.",
+    "2faTotpHint": " — open Google Authenticator.",
+    "resend2fa": "Resend code via Telegram",
+    "resending": "Resending…",
+    "resendFailed": "Could not resend code",
     "loginFailed": "Sign in failed"
   },
   "profile": {

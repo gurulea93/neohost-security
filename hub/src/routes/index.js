@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAgent, requireAuth, getBearerToken } from "../middleware/auth.js";
-import { exec, queryAll, queryOne, isDbExpired } from "../db/index.js";
+import { exec, queryAll, queryOne } from "../db/index.js";
 import { config } from "../config.js";
 import { newAgentKey } from "../db/schema.js";
 import {
@@ -21,6 +21,7 @@ import {
   getPrimaryPanelUser,
   hashPassword,
   listUserSessions,
+  find2faChallenge,
   loginRequires2fa,
   revokeOtherSessions,
   revokePanelSession,
@@ -595,22 +596,49 @@ export default function createRoutes({ broadcastWs }) {
     const c = await create2faChallenge(user, user.two_fa_method, "login");
     if (user.two_fa_method === "telegram") {
       if (!user.telegram_id) return res.status(500).json({ error: "2FA Telegram neconfigurat" });
-      const sent = await sendTelegramText(user.telegram_id, `<b>NeoHost Security</b>\nCod autentificare: <code>${c.code}</code>\nValabil 5 minute.`);
+      const sent = await sendTelegramText(user.telegram_id, `<b>NeoHost Security</b>\nCod autentificare: <code>${c.code}</code>\nValabil 10 minute.`);
       if (!sent) return res.status(503).json({ error: "Nu am putut trimite codul pe Telegram" });
       return res.json({ requires_2fa: true, challenge_token: c.token, method: "telegram", expires_at: c.expires, message: "Cod trimis pe Telegram" });
     }
     return res.json({ requires_2fa: true, challenge_token: c.token, method: "totp", expires_at: c.expires, message: "Introduceți codul din Google Authenticator" });
+  });
+  r.post("/api/auth/resend-2fa", async (req, res) => {
+    const username = String(req.body.username || "").trim();
+    const password = String(req.body.password || "");
+    if (!username || !password) return res.status(400).json({ error: "Utilizator și parolă obligatorii" });
+    const user = await queryOne("SELECT * FROM panel_users WHERE username = ? AND is_active = 1", [username]);
+    if (!user || !verifyPassword(user, password)) return res.status(401).json({ error: "Utilizator sau parolă incorectă" });
+    const clientIp = clientIpFromRequest(req);
+    if (!(await checkIpWhitelist(clientIp))) return res.status(403).json({ error: "IP neautorizat pentru panou", code: "ip_not_whitelisted", client_ip: clientIp });
+    if (!loginRequires2fa(user)) return res.status(400).json({ error: "2FA nu este activ" });
+    if (user.two_fa_method !== "telegram") {
+      return res.status(400).json({ error: "Retrimiterea codului este disponibilă doar pentru 2FA Telegram" });
+    }
+    if (!user.telegram_id) return res.status(500).json({ error: "2FA Telegram neconfigurat" });
+    await exec("DELETE FROM two_fa_challenges WHERE user_id = ? AND purpose = 'login'", [user.id]);
+    const c = await create2faChallenge(user, "telegram", "login");
+    const sent = await sendTelegramText(user.telegram_id, `<b>NeoHost Security</b>\nCod autentificare: <code>${c.code}</code>\nValabil 10 minute.`);
+    if (!sent) return res.status(503).json({ error: "Nu am putut trimite codul pe Telegram" });
+    return res.json({
+      requires_2fa: true,
+      challenge_token: c.token,
+      method: "telegram",
+      expires_at: c.expires,
+      message: "Cod retrimis pe Telegram"
+    });
   });
   r.post("/api/auth/verify-2fa", async (req, res) => {
     const token = String(req.body.challenge_token || "").trim();
     const code = String(req.body.code || "").trim();
     if (!token || !code) return res.status(400).json({ error: "Cod 2FA obligatoriu" });
     const row = await queryOne("SELECT * FROM two_fa_challenges WHERE token = ? AND purpose = 'login'", [token]);
-    if (!row || isDbExpired(row.expires_at)) return res.status(401).json({ error: "Sesiune 2FA expirată" });
+    if (!row) return res.status(401).json({ error: "Sesiune 2FA expirată" });
     const user = await queryOne("SELECT * FROM panel_users WHERE id = ? AND is_active = 1", [row.user_id]);
     if (!user) return res.status(401).json({ error: "Utilizator negăsit" });
+    const challenge = await find2faChallenge(token, user.id, "login");
+    if (!challenge) return res.status(401).json({ error: "Cod expirat. Solicitați un cod nou." });
     const method = String(req.body.method || "").trim() || row.method;
-    if (!(await verify2faChallenge(token, user, code, method))) return res.status(401).json({ error: "Cod 2FA invalid" });
+    if (!(await verify2faChallenge(token, user, code, method, "login"))) return res.status(401).json({ error: "Cod 2FA invalid" });
     const clientIp = clientIpFromRequest(req);
     if (!(await checkIpWhitelist(clientIp))) return res.status(403).json({ error: "IP neautorizat pentru panou", code: "ip_not_whitelisted", client_ip: clientIp });
     const session = await createPanelSession(user.id, clientIp, String(req.headers["user-agent"] || "").slice(0, 512));
@@ -726,7 +754,7 @@ export default function createRoutes({ broadcastWs }) {
     const user = req.accountUser;
     if (!user) return res.status(403).json({ error: "Cont panou indisponibil" });
     if (!req.body.challenge_token || !req.body.code || !req.body.telegram_user_id) return res.status(400).json({ error: "Date incomplete" });
-    if (!(await verify2faChallenge(req.body.challenge_token, user, req.body.code, "telegram"))) return res.status(400).json({ error: "Cod invalid sau expirat" });
+    if (!(await verify2faChallenge(req.body.challenge_token, user, req.body.code, "telegram", "enable_telegram"))) return res.status(400).json({ error: "Cod invalid sau expirat" });
     const tg = await queryOne("SELECT * FROM telegram_users WHERE id = ? AND is_active = 1", [Number(req.body.telegram_user_id)]);
     if (!tg) return res.status(404).json({ error: "Cont Telegram negăsit" });
     await exec("UPDATE panel_users SET telegram_id = ?, two_fa_method = 'telegram', updated_at = ? WHERE id = ?", [tg.telegram_id, new Date().toISOString(), user.id]);
@@ -748,7 +776,7 @@ export default function createRoutes({ broadcastWs }) {
         await sendTelegramText(user.telegram_id, `<b>NeoHost Security</b>\nCod dezactivare 2FA: <code>${c.code}</code>`);
         return res.json({ requires_code: true, challenge_token: c.token, expires_at: c.expires });
       }
-      if (!req.body.code || !(await verify2faChallenge(req.body.challenge_token, user, req.body.code, "telegram"))) return res.status(400).json({ error: "Cod Telegram invalid" });
+      if (!req.body.code || !(await verify2faChallenge(req.body.challenge_token, user, req.body.code, "telegram", "disable"))) return res.status(400).json({ error: "Cod Telegram invalid" });
     }
     await exec("UPDATE panel_users SET two_fa_method = 'none', totp_secret = NULL, telegram_id = NULL, updated_at = ? WHERE id = ?", [new Date().toISOString(), user.id]);
     res.json({ success: true, two_fa_method: "none" });

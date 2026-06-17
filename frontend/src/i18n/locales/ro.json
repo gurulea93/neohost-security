@@ -115,7 +115,10 @@
     "advancedToken": "Autentificare cu token API (avansat)",
     "usePassword": "Autentificare cu utilizator și parolă",
     "2faTelegramHint": " — verificați Telegram.",
-    "2faTotpHint": " — introduceți codul din aplicația Authenticator.",
+    "2faTotpHint": " — deschideți Google Authenticator.",
+    "resend2fa": "Retrimite codul pe Telegram",
+    "resending": "Se retrimite…",
+    "resendFailed": "Nu s-a putut retrimite codul",
     "loginFailed": "Autentificare eșuată"
   },
   "profile": {

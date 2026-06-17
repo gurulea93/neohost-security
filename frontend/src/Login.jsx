@@ -19,6 +19,7 @@ export default function Login({ onLogin, defaultApiUrl }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [step2fa, setStep2fa] = useState(null);
   const [otpCode, setOtpCode] = useState("");
   const [useLegacy, setUseLegacy] = useState(false);
@@ -68,6 +69,34 @@ export default function Login({ onLogin, defaultApiUrl }) {
       setError(err.message || t("login.loginFailed"));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResend2fa = async () => {
+    if (!password.trim()) {
+      setError("Introduceți parola pentru retrimitere.");
+      return;
+    }
+    setResending(true);
+    setError("");
+    try {
+      const r = await fetch(`${baseUrl()}/api/auth/resend-2fa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username.trim(), password }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || t("login.resendFailed"));
+      setStep2fa({
+        challenge_token: d.challenge_token,
+        method: d.method,
+        message: d.message,
+      });
+      setOtpCode("");
+    } catch (err) {
+      setError(err.message || t("login.resendFailed"));
+    } finally {
+      setResending(false);
     }
   };
 
@@ -208,6 +237,16 @@ export default function Login({ onLogin, defaultApiUrl }) {
             <button type="submit" className="btn-primary" disabled={loading}>
               {loading ? t("login.submitting") : t("login.confirm")}
             </button>
+            {step2fa.method === "telegram" && (
+              <button
+                type="button"
+                className="btn btn-sm w-full mt-2"
+                disabled={resending || loading}
+                onClick={handleResend2fa}
+              >
+                {resending ? t("login.resending") : t("login.resend2fa")}
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-sm w-full mt-2"
