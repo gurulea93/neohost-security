@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { randomBytes } from "node:crypto";
-import { exec, queryAll, queryOne } from "../db/index.js";
+import { exec, queryAll, queryOne, getDb, isDbExpired, nowIso } from "../db/index.js";
 import { config } from "../config.js";
 
 export async function getSetting(key, defaultValue = "") {
@@ -71,16 +71,26 @@ export async function checkIpWhitelist(clientIp) {
   return entries.some((e) => ipMatch(e.ip, ip));
 }
 
-export async function generateLinkCode(ttlMinutes = 10) {
-  await exec("DELETE FROM telegram_link_codes WHERE expires_at < ?", [new Date().toISOString()]);
+export async function generateLinkCode(ttlMinutes = 30) {
+  const db = getDb();
   let code = "";
   for (let i = 0; i < 10; i += 1) {
     code = randomBytes(3).toString("hex").toUpperCase().slice(0, 6);
     const row = await queryOne("SELECT code FROM telegram_link_codes WHERE code = ? AND used = 0", [code]);
     if (!row) break;
   }
+  if (db.dialect === "mysql") {
+    await exec("DELETE FROM telegram_link_codes WHERE expires_at < NOW()", []);
+    await exec(
+      "INSERT INTO telegram_link_codes (code, created_at, expires_at, used) VALUES (?, NOW(), DATE_ADD(NOW(), INTERVAL ? MINUTE), 0)",
+      [code, ttlMinutes]
+    );
+    const row = await queryOne("SELECT expires_at FROM telegram_link_codes WHERE code = ?", [code]);
+    return { code, expires: row?.expires_at || null };
+  }
+  await exec("DELETE FROM telegram_link_codes WHERE expires_at < ?", [nowIso()]);
   const expires = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();
-  await exec("INSERT INTO telegram_link_codes (code, created_at, expires_at, used) VALUES (?, ?, ?, 0)", [code, new Date().toISOString(), expires]);
+  await exec("INSERT INTO telegram_link_codes (code, created_at, expires_at, used) VALUES (?, ?, ?, 0)", [code, nowIso(), expires]);
   return { code, expires };
 }
 
@@ -113,7 +123,10 @@ export async function createTelegramWebSession(telegramId, hours = 24) {
 }
 
 export async function getTelegramWebSession(token) {
-  const row = await queryOne("SELECT * FROM telegram_web_sessions WHERE token = ? AND expires_at >= ?", [token, new Date().toISOString()]);
+  const db = getDb();
+  const row = db.dialect === "mysql"
+    ? await queryOne("SELECT * FROM telegram_web_sessions WHERE token = ? AND expires_at >= NOW()", [token])
+    : await queryOne("SELECT * FROM telegram_web_sessions WHERE token = ? AND expires_at >= ?", [token, new Date().toISOString()]);
   if (!row) return null;
   return queryOne("SELECT * FROM telegram_users WHERE telegram_id = ? AND is_active = 1", [row.telegram_id]);
 }

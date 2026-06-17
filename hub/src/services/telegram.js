@@ -1,4 +1,4 @@
-import { queryAll, queryOne, exec } from "../db/index.js";
+import { queryAll, queryOne, exec, getDb } from "../db/index.js";
 import { computeThreatLevel } from "../lib/intelligence.js";
 import { getTelegramBotToken, getTelegramWebAppUrl, setSetting } from "../lib/security.js";
 
@@ -62,8 +62,10 @@ async function handleLink(dbToken, chatId, tgUser, code, webAppUrl) {
     await send(dbToken, chatId, "Trimiteți: <code>/link COD</code>", mainKeyboard(webAppUrl));
     return;
   }
-  const row = await queryOne("SELECT * FROM telegram_link_codes WHERE code = ? AND used = 0", [code.toUpperCase()]);
-  if (!row || new Date(row.expires_at).getTime() < Date.now()) {
+  const row = getDb().dialect === "mysql"
+    ? await queryOne("SELECT * FROM telegram_link_codes WHERE code = ? AND used = 0 AND expires_at >= NOW()", [code.toUpperCase()])
+    : await queryOne("SELECT * FROM telegram_link_codes WHERE code = ? AND used = 0 AND expires_at >= ?", [code.toUpperCase(), new Date().toISOString()]);
+  if (!row) {
     await send(dbToken, chatId, "Cod invalid sau expirat.");
     return;
   }

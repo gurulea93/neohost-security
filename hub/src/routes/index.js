@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAgent, requireAuth, getBearerToken } from "../middleware/auth.js";
-import { exec, queryAll, queryOne } from "../db/index.js";
+import { exec, queryAll, queryOne, isDbExpired } from "../db/index.js";
 import { config } from "../config.js";
 import { newAgentKey } from "../db/schema.js";
 import {
@@ -606,7 +606,7 @@ export default function createRoutes({ broadcastWs }) {
     const code = String(req.body.code || "").trim();
     if (!token || !code) return res.status(400).json({ error: "Cod 2FA obligatoriu" });
     const row = await queryOne("SELECT * FROM two_fa_challenges WHERE token = ? AND purpose = 'login'", [token]);
-    if (!row || new Date(row.expires_at).getTime() < Date.now()) return res.status(401).json({ error: "Sesiune 2FA expirată" });
+    if (!row || isDbExpired(row.expires_at)) return res.status(401).json({ error: "Sesiune 2FA expirată" });
     const user = await queryOne("SELECT * FROM panel_users WHERE id = ? AND is_active = 1", [row.user_id]);
     if (!user) return res.status(401).json({ error: "Utilizator negăsit" });
     const method = String(req.body.method || "").trim() || row.method;

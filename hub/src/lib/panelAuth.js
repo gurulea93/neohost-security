@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { authenticator } from "otplib";
 import { config } from "../config.js";
-import { exec, queryAll, queryOne } from "../db/index.js";
+import { exec, queryAll, queryOne, isDbExpired } from "../db/index.js";
 
 export const CHALLENGE_MINUTES = 5;
 
@@ -100,7 +100,7 @@ export async function create2faChallenge(user, method, purpose = "login", code =
 export async function verify2faChallenge(challengeToken, user, code, method = null) {
   const row = await queryOne("SELECT * FROM two_fa_challenges WHERE token = ? AND user_id = ?", [challengeToken, user.id]);
   if (!row) return false;
-  if (new Date(row.expires_at).getTime() < Date.now()) return false;
+  if (isDbExpired(row.expires_at)) return false;
   const useMethod = method || row.method;
   if (row.method !== useMethod) return false;
   const entered = String(code || "").trim().replaceAll(" ", "");

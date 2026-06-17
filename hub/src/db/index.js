@@ -152,3 +152,19 @@ export function nowIso() {
   }
   return d.toISOString();
 }
+
+export function parseDbDatetime(value) {
+  if (value == null || value === "") return NaN;
+  if (value instanceof Date) return value.getTime();
+  const s = String(value).trim();
+  if (!s) return NaN;
+  if (/Z$|[+-]\d{2}:\d{2}$/.test(s)) return new Date(s).getTime();
+  if (s.includes("T")) return new Date(s).getTime();
+  if (state?.dialect === "mysql") return new Date(`${s.replace(" ", "T")}Z`).getTime();
+  return new Date(s).getTime();
+}
+
+export function isDbExpired(value) {
+  const t = parseDbDatetime(value);
+  return Number.isNaN(t) || t < Date.now();
+}
