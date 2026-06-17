@@ -2,8 +2,8 @@ import { exec, queryAll } from "../db/index.js";
 import { getSetting, setSetting } from "./security.js";
 
 const LOGO_MODES = new Set(["text", "logo", "both"]);
-export const MAX_LOGO_BYTES = 2 * 1024 * 1024;
-export const MAX_FAVICON_BYTES = 512 * 1024;
+export const MAX_LOGO_BYTES = 5 * 1024 * 1024;
+export const MAX_FAVICON_BYTES = 1024 * 1024;
 const ACCENT_PRESETS = {
   purple: "#9333ea",
   blue: "#3758F9",

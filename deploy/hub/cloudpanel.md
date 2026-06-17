@@ -91,6 +91,8 @@ Cu `SERVE_STATIC=1` în `.env`, Node servește singur React — proxy tot trafic
 **Sites → domeniu → Vhost → Custom Directives:**
 
 ```nginx
+client_max_body_size 12m;
+
 location /api/ {
     proxy_pass         http://127.0.0.1:7654;
     proxy_set_header   Host $host;
