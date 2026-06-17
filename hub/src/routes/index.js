@@ -27,6 +27,7 @@ import {
   revokePanelSession,
   revokeSessionToken,
   sessionResponse,
+  telegramCodeValidityText,
   verify2faChallenge,
   verifyPassword,
   verifyTotpCode
@@ -596,7 +597,7 @@ export default function createRoutes({ broadcastWs }) {
     const c = await create2faChallenge(user, user.two_fa_method, "login");
     if (user.two_fa_method === "telegram") {
       if (!user.telegram_id) return res.status(500).json({ error: "2FA Telegram neconfigurat" });
-      const sent = await sendTelegramText(user.telegram_id, `<b>NeoHost Security</b>\nCod autentificare: <code>${c.code}</code>\nValabil 10 minute.`);
+      const sent = await sendTelegramText(user.telegram_id, `<b>NeoHost Security</b>\nCod autentificare: <code>${c.code}</code>\n${telegramCodeValidityText()}`);
       if (!sent) return res.status(503).json({ error: "Nu am putut trimite codul pe Telegram" });
       return res.json({ requires_2fa: true, challenge_token: c.token, method: "telegram", expires_at: c.expires, message: "Cod trimis pe Telegram" });
     }
@@ -617,7 +618,7 @@ export default function createRoutes({ broadcastWs }) {
     if (!user.telegram_id) return res.status(500).json({ error: "2FA Telegram neconfigurat" });
     await exec("DELETE FROM two_fa_challenges WHERE user_id = ? AND purpose = 'login'", [user.id]);
     const c = await create2faChallenge(user, "telegram", "login");
-    const sent = await sendTelegramText(user.telegram_id, `<b>NeoHost Security</b>\nCod autentificare: <code>${c.code}</code>\nValabil 10 minute.`);
+    const sent = await sendTelegramText(user.telegram_id, `<b>NeoHost Security</b>\nCod autentificare: <code>${c.code}</code>\n${telegramCodeValidityText()}`);
     if (!sent) return res.status(503).json({ error: "Nu am putut trimite codul pe Telegram" });
     return res.json({
       requires_2fa: true,
@@ -746,7 +747,7 @@ export default function createRoutes({ broadcastWs }) {
     const tg = await queryOne("SELECT * FROM telegram_users WHERE id = ? AND is_active = 1", [Number(req.body.telegram_user_id)]);
     if (!tg) return res.status(404).json({ error: "Cont Telegram negăsit" });
     const c = await create2faChallenge(user, "telegram", "enable_telegram");
-    const sent = await sendTelegramText(tg.telegram_id, `<b>NeoHost Security</b>\nCod activare 2FA: <code>${c.code}</code>`);
+    const sent = await sendTelegramText(tg.telegram_id, `<b>NeoHost Security</b>\nCod activare 2FA: <code>${c.code}</code>\n${telegramCodeValidityText()}`);
     if (!sent) return res.status(503).json({ error: "Nu am putut trimite codul pe Telegram" });
     res.json({ challenge_token: c.token, telegram_user_id: tg.id, expires_at: c.expires });
   });
@@ -773,7 +774,7 @@ export default function createRoutes({ broadcastWs }) {
       if (!req.body.challenge_token) {
         if (!user.telegram_id) return res.status(400).json({ error: "Telegram 2FA neconfigurat" });
         const c = await create2faChallenge(user, "telegram", "disable");
-        await sendTelegramText(user.telegram_id, `<b>NeoHost Security</b>\nCod dezactivare 2FA: <code>${c.code}</code>`);
+        await sendTelegramText(user.telegram_id, `<b>NeoHost Security</b>\nCod dezactivare 2FA: <code>${c.code}</code>\n${telegramCodeValidityText()}`);
         return res.json({ requires_code: true, challenge_token: c.token, expires_at: c.expires });
       }
       if (!req.body.code || !(await verify2faChallenge(req.body.challenge_token, user, req.body.code, "telegram", "disable"))) return res.status(400).json({ error: "Cod Telegram invalid" });

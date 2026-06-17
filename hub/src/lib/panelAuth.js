@@ -4,7 +4,16 @@ import { authenticator } from "otplib";
 import { config } from "../config.js";
 import { exec, queryAll, queryOne, getDb, nowIso } from "../db/index.js";
 
-export const CHALLENGE_MINUTES = 10;
+export const CHALLENGE_TOTP_MINUTES = 5;
+export const CHALLENGE_TELEGRAM_SECONDS = 30;
+
+function isoAfterSeconds(s) {
+  return new Date(Date.now() + s * 1000).toISOString();
+}
+
+export function telegramCodeValidityText() {
+  return `Valabil ${CHALLENGE_TELEGRAM_SECONDS} secunde.`;
+}
 
 function isoAfterHours(h) {
   return new Date(Date.now() + h * 3600 * 1000).toISOString();
@@ -113,15 +122,23 @@ export async function create2faChallenge(user, method, purpose = "login", code =
   const token = randomBytes(24).toString("base64url");
   const finalCode = method === "telegram" && !code ? String(Math.floor(100000 + Math.random() * 900000)) : String(code || "");
   const db = getDb();
+  const telegram = method === "telegram";
   if (db.dialect === "mysql") {
-    await exec(
-      "INSERT INTO two_fa_challenges (token, user_id, code, method, purpose, expires_at, created_at) VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE), NOW())",
-      [token, user.id, finalCode, method, purpose, CHALLENGE_MINUTES]
-    );
+    if (telegram) {
+      await exec(
+        "INSERT INTO two_fa_challenges (token, user_id, code, method, purpose, expires_at, created_at) VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND), NOW())",
+        [token, user.id, finalCode, method, purpose, CHALLENGE_TELEGRAM_SECONDS]
+      );
+    } else {
+      await exec(
+        "INSERT INTO two_fa_challenges (token, user_id, code, method, purpose, expires_at, created_at) VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE), NOW())",
+        [token, user.id, finalCode, method, purpose, CHALLENGE_TOTP_MINUTES]
+      );
+    }
     const row = await queryOne("SELECT expires_at FROM two_fa_challenges WHERE token = ?", [token]);
     return { token, code: finalCode, expires: row?.expires_at };
   }
-  const expires = isoAfterMinutes(CHALLENGE_MINUTES);
+  const expires = telegram ? isoAfterSeconds(CHALLENGE_TELEGRAM_SECONDS) : isoAfterMinutes(CHALLENGE_TOTP_MINUTES);
   await exec(
     "INSERT INTO two_fa_challenges (token, user_id, code, method, purpose, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     [token, user.id, finalCode, method, purpose, expires, nowIso()]
