@@ -175,15 +175,173 @@ function sqliteTables() {
 }
 
 function mysqlTables() {
-  return sqliteTables().map((sql) =>
-    sql
-      .replaceAll("INTEGER PRIMARY KEY AUTOINCREMENT", "INT AUTO_INCREMENT PRIMARY KEY")
-      .replaceAll("INTEGER PRIMARY KEY", "INT PRIMARY KEY")
-      .replaceAll("INTEGER ", "INT ")
-      .replaceAll(" REAL ", " DOUBLE ")
-      .replaceAll(" TEXT ", " VARCHAR(4096) ")
-      .replaceAll(" DEFAULT CURRENT_TIMESTAMP", " DEFAULT CURRENT_TIMESTAMP")
-  );
+  return [
+    `CREATE TABLE IF NOT EXISTS servers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(128) NOT NULL,
+      hostname VARCHAR(255) DEFAULT '',
+      description VARCHAR(512) DEFAULT '',
+      agent_key VARCHAR(64) UNIQUE NOT NULL,
+      is_active TINYINT(1) DEFAULT 1,
+      last_seen DATETIME NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      mod_fail2ban TINYINT(1) DEFAULT 1,
+      mod_csf TINYINT(1) DEFAULT 1,
+      mod_nftables TINYINT(1) DEFAULT 1,
+      cap_fail2ban TINYINT(1) DEFAULT 0,
+      cap_csf TINYINT(1) DEFAULT 0,
+      cap_nftables TINYINT(1) DEFAULT 0,
+      latitude DOUBLE NULL,
+      longitude DOUBLE NULL,
+      location_label VARCHAR(128) DEFAULT ''
+    )`,
+    `CREATE TABLE IF NOT EXISTS ban_records (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      server_id INT NOT NULL,
+      ts DATETIME NOT NULL,
+      ip VARCHAR(45) NOT NULL,
+      jail VARCHAR(64) NOT NULL,
+      country VARCHAR(128) DEFAULT '',
+      country_code VARCHAR(8) DEFAULT '',
+      city VARCHAR(128) DEFAULT '',
+      isp VARCHAR(255) DEFAULT '',
+      lat DOUBLE DEFAULT 0,
+      lon DOUBLE DEFAULT 0,
+      INDEX ix_ban_server_ts (server_id, ts)
+    )`,
+    `CREATE TABLE IF NOT EXISTS event_logs (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      server_id INT NOT NULL,
+      ts DATETIME NOT NULL,
+      level VARCHAR(16) NOT NULL,
+      message TEXT NOT NULL,
+      ip VARCHAR(45) NULL,
+      jail VARCHAR(64) NULL,
+      INDEX ix_event_server_ts (server_id, ts)
+    )`,
+    `CREATE TABLE IF NOT EXISTS network_metrics (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      server_id INT NOT NULL,
+      ts DATETIME NOT NULL,
+      rx_mbps DOUBLE DEFAULT 0,
+      tx_mbps DOUBLE DEFAULT 0,
+      INDEX ix_net_server_ts (server_id, ts)
+    )`,
+    `CREATE TABLE IF NOT EXISTS connection_metrics (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      server_id INT NOT NULL,
+      ts DATETIME NOT NULL,
+      count INT DEFAULT 0,
+      INDEX ix_conn_server_ts (server_id, ts)
+    )`,
+    `CREATE TABLE IF NOT EXISTS jail_snapshots (
+      server_id INT PRIMARY KEY,
+      updated_at DATETIME NULL,
+      data LONGTEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS connection_snapshots (
+      server_id INT PRIMARY KEY,
+      updated_at DATETIME NULL,
+      data LONGTEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS agent_commands (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      server_id INT NOT NULL,
+      action VARCHAR(32) NOT NULL,
+      payload TEXT,
+      status VARCHAR(16) DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completed_at DATETIME NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS csf_snapshots (
+      server_id INT PRIMARY KEY,
+      updated_at DATETIME NULL,
+      data LONGTEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS nftables_snapshots (
+      server_id INT PRIMARY KEY,
+      updated_at DATETIME NULL,
+      data LONGTEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS hub_settings (
+      \`key\` VARCHAR(64) PRIMARY KEY,
+      value TEXT
+    )`,
+    `CREATE TABLE IF NOT EXISTS telegram_users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      telegram_id BIGINT UNIQUE NOT NULL,
+      username VARCHAR(128) DEFAULT '',
+      first_name VARCHAR(128) DEFAULT '',
+      linked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      is_active TINYINT(1) DEFAULT 1
+    )`,
+    `CREATE TABLE IF NOT EXISTS telegram_link_codes (
+      code VARCHAR(8) PRIMARY KEY,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL,
+      used TINYINT(1) DEFAULT 0
+    )`,
+    `CREATE TABLE IF NOT EXISTS ip_whitelist (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      ip VARCHAR(64) NOT NULL,
+      label VARCHAR(128) DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS telegram_web_sessions (
+      token VARCHAR(64) PRIMARY KEY,
+      telegram_id BIGINT NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS panel_users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      username VARCHAR(64) UNIQUE NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      totp_secret VARCHAR(64) NULL,
+      two_fa_method VARCHAR(16) DEFAULT 'none',
+      telegram_id BIGINT NULL,
+      is_active TINYINT(1) DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS panel_sessions (
+      token VARCHAR(64) PRIMARY KEY,
+      user_id INT NOT NULL,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      ip_address VARCHAR(45) DEFAULT '',
+      user_agent VARCHAR(512) DEFAULT ''
+    )`,
+    `CREATE TABLE IF NOT EXISTS two_fa_challenges (
+      token VARCHAR(64) PRIMARY KEY,
+      user_id INT NOT NULL,
+      code VARCHAR(16) DEFAULT '',
+      method VARCHAR(16) NOT NULL,
+      purpose VARCHAR(32) DEFAULT 'login',
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS branding_history (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NULL,
+      username VARCHAR(64) DEFAULT '',
+      changes TEXT,
+      snapshot TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS security_templates (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      kind VARCHAR(32) NOT NULL,
+      slug VARCHAR(64) UNIQUE NOT NULL,
+      name VARCHAR(128) NOT NULL,
+      description TEXT,
+      instructions TEXT,
+      critical TINYINT(1) DEFAULT 0,
+      payload TEXT,
+      is_builtin TINYINT(1) DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`
+  ];
 }
 
 function pgTables() {
