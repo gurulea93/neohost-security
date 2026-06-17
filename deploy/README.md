@@ -2,50 +2,58 @@
 
 ## HOST (hub central)
 
-**Unde:** hosting-ul tău (VPS cu Nginx, PostgreSQL/MySQL, domeniu HTTPS)
+**Unde:** hosting (VPS, cPanel, CloudPanel, FastPanel, BrainyCP, DirectAdmin…)
 
-**Ce face:** dashboard web, API REST, WebSocket live, baza de date, bot Telegram, autentificare panou.
+**Ce face:** dashboard web, API REST, WebSocket, baza de date, bot Telegram, autentificare panou.
 
-**Fișiere:** vezi `deploy/hub/`
+**Tehnologie:** **Node.js 22.5+** (`hub/`) — fără Python pe hosting.
+
+**Fișiere:** `deploy/hub/`
 
 | Fișier | Descriere |
 |--------|-----------|
-| `install.sh` | Instalare în `/opt/neohost-security` |
-| `package.sh` | Creează `dist/neohost-hub.tar.gz` |
-| `neohost-security.service` | systemd backend (gunicorn) |
+| `install.sh` | Instalare Node + systemd în `/opt/neohost-security` |
+| `package.sh` | Arhivă `dist/neohost-hub.tar.gz` |
+| `panels.md` | Ghid generic panel hosting |
+| `cloudpanel.md` | Ghid CloudPanel |
+| `neohost-security.service` | systemd (node src/index.js) |
 | `nginx-security.conf` | Reverse proxy HTTPS + SPA |
 
-**Din repo (sursă):**
-- `backend/*` **fără** `agent.py`, `collector.py`
+**Din repo:**
+- `hub/` (fără `node_modules`, `data/`)
 - `frontend/dist/` (build React)
 
-**Instalare:**
+**Instalare VPS:**
 ```bash
-export DATABASE_URL='postgresql://user:pass@localhost/neohost'
+cd frontend && npm install && npm run build && cd ..
+export DATABASE_URL='mysql://user:pass@127.0.0.1:3306/neohost'
 export DOMAIN='security.domeniu.md'
 bash deploy/hub/install.sh
+```
+
+**Panel (PM2):**
+```bash
+cd hub && npm install --omit=dev
+cp .env.example .env   # editează DATABASE_URL
+pm2 start ecosystem.config.cjs && pm2 save
 ```
 
 ---
 
 ## SERVERE controlate (agenți)
 
-**Unde:** fiecare server Linux administrat (web, mail, VPS client)
+**Unde:** fiecare server Linux administrat
 
-**Ce face:** raportează starea la hub, execută comenzi Fail2Ban / CSF / nftables local.
+**Tehnologie:** **Python 3** (`agent.py`, `collector.py`)
 
-**Fișiere:** vezi `deploy/agent/`
+**Fișiere:** `deploy/agent/`
 
 | Fișier | Descriere |
 |--------|-----------|
 | `install.sh` | Instalare în `/opt/neohost-agent` |
-| `package.sh` | Creează `dist/neohost-agent.tar.gz` |
-| `check-remote.sh` | Diagnostic conectivitate + serviciu |
-| `neohost-agent.service` | systemd agent (root) |
-
-**Din repo (sursă):**
-- `backend/agent.py`
-- `backend/collector.py`
+| `package.sh` | Arhivă `dist/neohost-agent.tar.gz` |
+| `check-remote.sh` | Diagnostic conectivitate |
+| `neohost-agent.service` | systemd (root) |
 
 **Instalare:**
 ```bash
@@ -57,13 +65,13 @@ bash deploy/agent/check-remote.sh
 
 ---
 
-## Ce NU se amestecă
+## Ce stă unde
 
 | Componentă | HOST | SERVER |
 |------------|:----:|:------:|
-| `app.py`, modele DB, Telegram | ✓ | |
+| `hub/` (Node.js API) | ✓ | |
 | `frontend/dist` | ✓ | |
-| PostgreSQL / MySQL | ✓ | |
+| MySQL / MariaDB / PostgreSQL | ✓ | |
 | `agent.py`, `collector.py` | | ✓ |
-| fail2ban-client, csf, nft | | ✓ (opțional) |
-| Port inbound deschis | ✓ (443) | ✗ (doar outbound) |
+| fail2ban, csf, nft | | ✓ |
+| Port inbound 443 (HTTPS) | ✓ | ✗ (doar outbound) |

@@ -1,161 +1,94 @@
-# NeoHost Hub pe CloudPanel
+# NeoHost Hub pe CloudPanel (Node.js)
 
-Pe CloudPanel pui **doar HUB-ul** (dashboard + API). **Nu** pui agentul aici — agentul merge pe serverele Linux pe care le controlezi.
+Pe CloudPanel pui **doar HUB-ul** (dashboard + API Node.js). **Nu** pui agentul aici.
+
+> Ghid generic pentru alte paneluri: [panels.md](panels.md)
 
 ---
 
 ## Ce ai nevoie
 
-- VPS cu **CloudPanel** (acces SSH, ideal root sau sudo)
-- Domeniu/subdomeniu, ex: `security.domeniu.md`
-- **MariaDB** sau **MySQL** (din CloudPanel → Databases)
-- Python **3.10+** pe server (`python3 --version`)
+- VPS cu **CloudPanel** + SSH
+- Domeniu: ex. `security.domeniu.md`
+- **Node.js 18+** (`node -v`)
+- **MariaDB** (CloudPanel → Databases)
 
 ---
 
 ## Pas 1 — Site în CloudPanel
 
 1. **Sites → Add Site**
-2. Tip: **Create a PHP Site** (sau static — important e domeniul)
-3. Domain: `security.domeniu.md`
-4. Notează **Site User** (ex: `neohost-sec`)
-
-SSL: **Sites → domeniu → SSL/TLS → Let's Encrypt** (Activează HTTPS)
+2. Tip: **Static Site** sau **PHP Site** (pentru domeniu + SSL)
+3. SSL: Let's Encrypt
 
 ---
 
 ## Pas 2 — Bază de date
 
-1. **Databases → Add Database**
-2. Nume DB: `neohost`
-3. User + parolă puternică
-4. Notează pentru `DATABASE_URL`:
+1. **Databases → Add Database** → `neohost`
+2. Notează user + parolă
 
-```bash
-export DATABASE_URL='mysql+pymysql://USER:PAROLA@127.0.0.1:3306/neohost'
+```env
+DATABASE_URL=mysql://USER:PAROLA@127.0.0.1:3306/neohost
 ```
-
-(URL-encode parola dacă are caractere speciale: `@` → `%40`, etc.)
 
 ---
 
-## Pas 3 — Încarcă fișierele hub (SSH)
-
-Conectează-te SSH (CloudPanel → Site → SSH / sau root):
+## Pas 3 — Upload hub Node.js (SSH)
 
 ```bash
-# Ca root sau site user — exemplu director:
-INSTALL=/home/neohost-sec/neohost-security
+INSTALL=/home/site-user/neohost-security
 mkdir -p "$INSTALL"
 cd "$INSTALL"
+
+# git clone sau upload arhivă package.sh
+git clone https://github.com/gurulea93/neohost-security.git .
+cd frontend && npm install && npm run build
+cd ../hub && npm install --omit=dev
 ```
 
-### Variantă A — arhivă de pe PC
+Creează `hub/.env`:
 
-Pe PC (în repo):
-
-```bash
-bash deploy/hub/package.sh
-```
-
-Încarcă `dist/neohost-hub.tar.gz` pe server (SFTP/SCP), apoi:
-
-```bash
-cd /home/neohost-sec
-tar -xzf neohost-hub.tar.gz
-# structura din arhivă: neohost-hub/backend, neohost-hub/frontend/dist
-mv neohost-hub "$INSTALL"   # sau extrage direct în $INSTALL
-```
-
-### Variantă B — git clone
-
-```bash
-git clone <repo-ul-tau> "$INSTALL"
-cd "$INSTALL/frontend" && npm install && npm run build
+```env
+HOST=127.0.0.1
+PORT=7654
+NODE_ENV=production
+SERVE_STATIC=1
+DATABASE_URL=mysql://USER:PAROLA@127.0.0.1:3306/neohost
+SECURITY_API_TOKEN=$(openssl rand -hex 32)
 ```
 
 ---
 
-## Pas 4 — Backend Python (venv + gunicorn)
+## Pas 4 — Pornește hub-ul
+
+**PM2** (recomandat):
 
 ```bash
-INSTALL=/home/neohost-sec/neohost-security
-cd "$INSTALL"
-
-python3 -m venv venv
-./venv/bin/pip install -r backend/requirements.txt
-
-export DATABASE_URL='mysql+pymysql://USER:PAROLA@127.0.0.1:3306/neohost'
-export HOST=127.0.0.1
-export PORT=7654
-export SECURITY_API_TOKEN=$(openssl rand -hex 32)
-# Salvează TOKEN-ul undeva sigur (opțional, login panou e principal)
-
-# Test rapid (Ctrl+C după ce vezi că pornește):
-cd backend && ../venv/bin/python app.py
+cd "$INSTALL/hub"
+pm2 start ecosystem.config.cjs
+pm2 save
+pm2 startup
 ```
 
-Producție — **systemd** (ca root), fișier `/etc/systemd/system/neohost-security.service`:
-
-```ini
-[Unit]
-Description=NeoHost Security Hub
-After=network.target mariadb.service
-
-[Service]
-Type=simple
-User=neohost-sec
-WorkingDirectory=/home/neohost-sec/neohost-security/backend
-Environment="DATABASE_URL=mysql+pymysql://USER:PAROLA@127.0.0.1:3306/neohost"
-Environment="HOST=127.0.0.1"
-Environment="PORT=7654"
-ExecStart=/home/neohost-sec/neohost-security/venv/bin/gunicorn \
-    --worker-class flask_sock.gunicorn.Worker \
-    --workers 2 \
-    --bind 127.0.0.1:7654 \
-    --timeout 120 \
-    app:app
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-systemctl daemon-reload
-systemctl enable --now neohost-security
-systemctl status neohost-security
-```
+Sau **systemd** ca root: `bash deploy/hub/install.sh`
 
 ---
 
-## Pas 5 — Frontend (fișiere statice)
-
-Copiază build-ul React în **document root**-ul site-ului CloudPanel:
+## Pas 5 — Fișiere statice (dacă SERVE_STATIC=0)
 
 ```bash
-SITE_ROOT=/home/neohost-sec/htdocs/security.domeniu.md
-# calea exactă o vezi în CloudPanel → Site → Vhost → Document Root
-
+SITE_ROOT=/home/site-user/htdocs/security.domeniu.md
 rsync -a "$INSTALL/frontend/dist/" "$SITE_ROOT/"
 ```
 
-Sau, dacă ai extras din `neohost-hub.tar.gz`:
-
-```bash
-rsync -a "$INSTALL/frontend/dist/" "$SITE_ROOT/"
-```
+Cu `SERVE_STATIC=1` în `.env`, Node servește singur React — proxy tot traficul la 7654.
 
 ---
 
-## Pas 6 — Nginx în CloudPanel (reverse proxy API + WebSocket)
+## Pas 6 — Nginx custom directives
 
-CloudPanel gestionează Nginx. **Nu** înlocui tot vhost-ul manual — adaugă directive custom.
-
-**Sites → security.domeniu.md → Vhost → Vhost (sau Custom Directives / Reverse Proxy)**
-
-Adaugă **în blocul `server` HTTPS** (sub `root`):
+**Sites → domeniu → Vhost → Custom Directives:**
 
 ```nginx
 location /api/ {
@@ -163,7 +96,7 @@ location /api/ {
     proxy_set_header   Host $host;
     proxy_set_header   X-Real-IP $remote_addr;
     proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_read_timeout 60s;
+    proxy_set_header   X-Forwarded-Proto $scheme;
 }
 
 location /ws {
@@ -173,30 +106,33 @@ location /ws {
     proxy_set_header    Connection "upgrade";
     proxy_set_header    Host $host;
     proxy_read_timeout  3600s;
-    proxy_send_timeout  3600s;
 }
 
 location / {
-    try_files $uri $uri/ /index.html;
+    proxy_pass         http://127.0.0.1:7654;
+    proxy_set_header   Host $host;
+    proxy_set_header   X-Real-IP $remote_addr;
+    proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $scheme;
 }
 ```
 
-Salvează și reîncarcă Nginx din CloudPanel (sau `nginx -t && systemctl reload nginx` ca root).
+(Ultimul bloc `location /` e necesar dacă `SERVE_STATIC=1` și totul merge prin Node.)
 
 ---
 
 ## Pas 7 — Verificare
 
-1. `curl -s http://127.0.0.1:7654/api/status` pe server → răspuns JSON
-2. Browser: `https://security.domeniu.md` → login panou
-3. Login implicit prima dată: **admin / admin** → schimbă parola în **Profil**
-4. **Servere → Adaugă server** → copiază **Agent Key**
+```bash
+curl -s http://127.0.0.1:7654/api/status
+curl -s https://security.domeniu.md/api/status
+```
+
+Login: **admin** / **admin** → schimbă parola în Profil.
 
 ---
 
-## Pas 8 — Agenți pe serverele tale (NU pe CloudPanel)
-
-Pe fiecare VPS/client Linux:
+## Agenți (servere Linux, NU CloudPanel)
 
 ```bash
 export HUB_URL='https://security.domeniu.md'
@@ -206,32 +142,11 @@ bash deploy/agent/install.sh
 
 ---
 
-## Rezumat — ce stă unde pe CloudPanel
-
-| Componentă | Locație |
-|------------|---------|
-| React (`frontend/dist`) | `/home/USER/htdocs/DOMENIU/` |
-| Flask API | `127.0.0.1:7654` (gunicorn + systemd) |
-| MariaDB | CloudPanel Databases |
-| `agent.py` | **NU** pe CloudPanel |
-
----
-
 ## Probleme frecvente
 
 | Simptom | Soluție |
 |---------|---------|
-| Pagină albă / 502 la login | `systemctl status neohost-security`; verifică `DATABASE_URL` |
-| API 404 | Lipsește `location /api/` în vhost |
-| WebSocket nu merge | Lipsește `location /ws` cu `Upgrade` |
-| DB connection error | User DB are drepturi pe `neohost`; host `127.0.0.1` |
-| CORS / wrong API URL | Frontend folosește același domeniu (proxy `/api`) — nu e nevoie de `VITE_API_URL` dacă totul e pe același host |
-
----
-
-## Securitate
-
-- Schimbă parola `admin` imediat
-- Restricționează SSH / CloudPanel admin
-- Opțional: IP whitelist în Profil → Whitelist
-- `HUB_URL` pentru agenți = URL-ul HTTPS public
+| 502 | `pm2 status` sau `systemctl status neohost-security` |
+| DB error | `DATABASE_URL` corect, user are drepturi pe `neohost` |
+| WS nu merge | Bloc `location /ws` cu Upgrade |
+| Node lipsă | Instalează Node 18+ (nodesource / nvm) |

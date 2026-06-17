@@ -1,22 +1,18 @@
 [Unit]
-Description=NeoHost Security Monitor Backend
-After=network.target
+Description=NeoHost Security Hub (Node.js)
+After=network.target mariadb.service
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/neohost-security/backend
-Environment="SECURITY_API_TOKEN=schimba-acest-token-secret"
-Environment="DATABASE_URL=postgresql://user:pass@localhost/neohost"
-Environment="HOST=127.0.0.1"
-Environment="PORT=7654"
-ExecStart=/opt/neohost-security/venv/bin/gunicorn \
-    --worker-class flask_sock.gunicorn.Worker \
-    --workers 2 \
-    --bind 127.0.0.1:7654 \
-    --timeout 120 \
-    --keep-alive 30 \
-    app:app
+WorkingDirectory=/opt/neohost-security/hub
+Environment=NODE_ENV=production
+Environment=SERVE_STATIC=1
+Environment=HOST=127.0.0.1
+Environment=PORT=7654
+Environment=SECURITY_API_TOKEN=schimba-acest-token-secret
+Environment=DATABASE_URL=mysql://user:pass@127.0.0.1:3306/neohost
+ExecStart=/usr/bin/node src/index.js
 Restart=always
 RestartSec=5
 StandardOutput=journal

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Arhivă deploy HUB — rulează din repo: bash deploy/hub/package.sh
+# Arhivă deploy HUB (Node.js) — rulează din repo: bash deploy/hub/package.sh
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -11,13 +11,16 @@ npm install --silent && npm run build --silent
 cd "$REPO_ROOT"
 
 rm -rf "$OUT"
-mkdir -p "$OUT/backend" "$OUT/frontend/dist" "$OUT/deploy/hub"
-rsync -a --exclude='.venv' --exclude='__pycache__' --exclude='*.db' \
-  --exclude='agent.py' --exclude='collector.py' \
-  "$REPO_ROOT/backend/" "$OUT/backend/"
+mkdir -p "$OUT/hub" "$OUT/frontend/dist" "$OUT/deploy/hub" "$OUT/deploy/agent"
+
+rsync -a --exclude='node_modules' --exclude='data' \
+  "$REPO_ROOT/hub/" "$OUT/hub/"
 cp -r "$REPO_ROOT/frontend/dist/"* "$OUT/frontend/dist/"
-cp "$SCRIPT_DIR/install.sh" "$SCRIPT_DIR/neohost-security.service" "$SCRIPT_DIR/nginx-security.conf" "$OUT/deploy/hub/"
+cp "$SCRIPT_DIR/install.sh" "$SCRIPT_DIR/neohost-security.service" \
+   "$SCRIPT_DIR/nginx-security.conf" "$SCRIPT_DIR/cloudpanel.md" "$OUT/deploy/hub/"
+rsync -a "$REPO_ROOT/deploy/agent/" "$OUT/deploy/agent/"
 
 mkdir -p "$REPO_ROOT/dist"
 tar -czf "$ARCHIVE" -C "$REPO_ROOT/dist" neohost-hub
 echo "Creat: $ARCHIVE"
+echo "Pe server: tar -xzf neohost-hub.tar.gz && cd neohost-hub && bash deploy/hub/install.sh"
