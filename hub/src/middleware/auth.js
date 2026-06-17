@@ -33,6 +33,9 @@ export async function requireAuth(req, res, next) {
   }
   const tgUser = await getTelegramWebSession(token);
   if (tgUser) {
+    if (!(await checkIpWhitelist(clientIp))) {
+      return res.status(403).json({ error: "IP neautorizat pentru panou", code: "ip_not_whitelisted", client_ip: clientIp });
+    }
     req.authType = "telegram";
     req.telegramUser = tgUser;
     return next();

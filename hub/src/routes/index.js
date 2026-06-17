@@ -603,7 +603,19 @@ export default function createRoutes({ broadcastWs }) {
       whitelist: whitelist.map((w) => ({ id: w.id, ip: w.ip, label: w.label || "", created_at: w.created_at || null }))
     });
   });
-  r.put("/api/profile/settings", requireAuth, async (req, res) => { if ("ip_whitelist_enabled" in req.body) await setSetting("ip_whitelist_enabled", req.body.ip_whitelist_enabled ? "1" : "0"); res.json({ success: true }); });
+  r.put("/api/profile/settings", requireAuth, async (req, res) => {
+    if ("ip_whitelist_enabled" in req.body) {
+      const enabled = !!req.body.ip_whitelist_enabled;
+      if (enabled) {
+        const entries = await queryAll("SELECT id FROM ip_whitelist LIMIT 1", []);
+        if (!entries.length) {
+          return res.status(400).json({ error: "Adăugați cel puțin un IP în listă înainte de activare" });
+        }
+      }
+      await setSetting("ip_whitelist_enabled", enabled ? "1" : "0");
+    }
+    res.json({ success: true });
+  });
   r.get("/api/branding", async (_req, res) => { res.json(await getBranding()); });
   r.put("/api/profile/branding", requireAuth, async (req, res) => { try { res.json({ success: true, branding: await updateBranding(req.body || {}, req.accountUser) }); } catch (e) { res.status(400).json({ error: e.message }); } });
   r.get("/api/profile/branding/history", requireAuth, async (req, res) => { res.json({ history: await listBrandingHistory(Number(req.query.limit || 30)) }); });

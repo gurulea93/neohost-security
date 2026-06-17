@@ -20,22 +20,42 @@ export function maskToken(token) {
   return `••••${token.slice(-6)}`;
 }
 
-export function clientIpFromRequest(req) {
-  const xff = req.headers["x-forwarded-for"];
-  if (xff) return String(xff).split(",")[0].trim();
-  const xr = req.headers["x-real-ip"];
-  if (xr) return String(xr).trim();
-  return req.ip || req.socket?.remoteAddress || "";
+export function normalizeClientIp(ip) {
+  const v = String(ip || "").trim();
+  if (v.startsWith("::ffff:")) return v.slice(7);
+  return v;
 }
 
-function isLocalIp(ip) {
-  return ["127.0.0.1", "::1", "localhost", "::ffff:127.0.0.1"].includes(ip);
+export function clientIpFromRequest(req) {
+  const xff = req.headers["x-forwarded-for"];
+  if (xff) return normalizeClientIp(String(xff).split(",")[0]);
+  const xr = req.headers["x-real-ip"];
+  if (xr) return normalizeClientIp(xr);
+  const cf = req.headers["cf-connecting-ip"];
+  if (cf) return normalizeClientIp(cf);
+  return normalizeClientIp(req.ip || req.socket?.remoteAddress || "");
+}
+
+function ipv4ToInt(ip) {
+  const p = ip.split(".").map((x) => parseInt(x, 10));
+  if (p.length !== 4 || p.some((n) => Number.isNaN(n) || n < 0 || n > 255)) throw new Error("bad ipv4");
+  return ((p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]) >>> 0;
 }
 
 function ipMatch(allowed, client) {
   if (!allowed || !client) return false;
-  if (allowed.includes("/")) return client.startsWith(allowed.split("/")[0]);
-  return allowed === client;
+  const a = normalizeClientIp(allowed.trim());
+  const c = normalizeClientIp(client.trim());
+  if (!a.includes("/")) return a === c;
+  const [base, bitsStr] = a.split("/");
+  const bits = parseInt(bitsStr, 10);
+  if (Number.isNaN(bits) || bits < 0 || bits > 32) return false;
+  try {
+    const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+    return (ipv4ToInt(base) & mask) === (ipv4ToInt(c) & mask);
+  } catch {
+    return false;
+  }
 }
 
 export async function isWhitelistEnabled() {
@@ -43,11 +63,12 @@ export async function isWhitelistEnabled() {
 }
 
 export async function checkIpWhitelist(clientIp) {
-  if (isLocalIp(clientIp)) return true;
   if (!(await isWhitelistEnabled())) return true;
+  const ip = normalizeClientIp(clientIp);
   const entries = await queryAll("SELECT ip FROM ip_whitelist", []);
-  if (!entries.length) return true;
-  return entries.some((e) => ipMatch(e.ip, clientIp));
+  if (!entries.length) return false;
+  if (config.panelAllowLocalhost && ["127.0.0.1", "::1", "localhost"].includes(ip)) return true;
+  return entries.some((e) => ipMatch(e.ip, ip));
 }
 
 export async function generateLinkCode(ttlMinutes = 10) {

@@ -131,10 +131,19 @@ export default function ProfilePage({ authFetch, showToast }) {
 
   const toggleWhitelist = async () => {
     const next = !whitelistOn;
-    await authFetch("/api/profile/settings", {
+    if (next && !(profile?.whitelist || []).length) {
+      showToast(t("profile.whitelistNeedIp"), theme.error);
+      return;
+    }
+    const r = await authFetch("/api/profile/settings", {
       method: "PUT",
       body: JSON.stringify({ ip_whitelist_enabled: next }),
     });
+    const d = await r.json();
+    if (!r.ok) {
+      showToast(d.error || t("common.error"), theme.error);
+      return;
+    }
     setWhitelistOn(next);
     showToast(next ? t("profile.whitelistOn") : t("profile.whitelistOff"));
   };
@@ -724,6 +733,9 @@ export default function ProfilePage({ authFetch, showToast }) {
             </button>
           </div>
           <p className="text-sm text-muted-foreground mb-4">{t("profile.whitelistDesc")}</p>
+          {!whitelistOn && (
+            <p className="text-sm text-amber-400/90 mb-4">{t("profile.whitelistHint")}</p>
+          )}
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <span className="text-sm text-muted-foreground">{t("profile.yourIp")}</span>
             <span className="mono font-semibold text-purple-400">{profile?.client_ip || "—"}</span>
@@ -754,7 +766,7 @@ export default function ProfilePage({ authFetch, showToast }) {
           </table>
           {(profile?.whitelist || []).length === 0 && (
             <p className="text-sm text-muted-foreground mt-3">
-              Listă goală — toate IP-urile sunt permise când whitelist-ul e inactiv.
+              {whitelistOn ? t("profile.whitelistEmptyBlocked") : t("profile.whitelistEmptyInactive")}
             </p>
           )}
         </div>

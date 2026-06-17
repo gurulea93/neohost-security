@@ -13,8 +13,11 @@ import { ensureBuiltinTemplates } from "./lib/securityTemplates.js";
 import { getPanelSession } from "./lib/panelAuth.js";
 import { getTelegramBotToken, getTelegramWebAppUrl, setSetting } from "./lib/security.js";
 import { cacheTelegramBotUsername, startTelegramBot } from "./services/telegram.js";
+import { enforcePanelIpWhitelist } from "./middleware/panelIp.js";
+import { clientIpFromRequest, checkIpWhitelist } from "./lib/security.js";
 
 const app = express();
+app.set("trust proxy", true);
 app.use(cors({ origin: "*" }));
 app.use(express.json({ limit: "4mb" }));
 
@@ -38,6 +41,7 @@ function broadcastWs(serverId, payload) {
   }
 }
 
+app.use(enforcePanelIpWhitelist);
 app.use(createRoutes({ broadcastWs }));
 
 if (config.serveStatic) {
@@ -77,7 +81,15 @@ async function loadIntel(serverId) {
   };
 }
 
-wss.on("connection", (ws) => {
+wss.on("connection", async (ws, req) => {
+  const clientIp = clientIpFromRequest(req);
+  if (!(await checkIpWhitelist(clientIp))) {
+    try {
+      ws.send(safeJson({ type: "error", message: "IP neautorizat pentru panou" }));
+      ws.close();
+    } catch { /* noop */ }
+    return;
+  }
   let serverId = null;
   const timer = setTimeout(() => { try { ws.close(); } catch { /* noop */ } }, 5000);
 

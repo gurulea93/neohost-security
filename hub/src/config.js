@@ -24,6 +24,7 @@ export const config = {
   panelAdminPassword: process.env.PANEL_ADMIN_PASSWORD || "admin",
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
   telegramWebAppUrl: (process.env.TELEGRAM_WEBAPP_URL || "").replace(/\/+$/, ""),
+  panelAllowLocalhost: process.env.PANEL_ALLOW_LOCALHOST === "1",
   hubRoot: HUB_ROOT
 };
 
