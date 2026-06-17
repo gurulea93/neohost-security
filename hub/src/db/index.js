@@ -50,6 +50,21 @@ async function runSchema(db) {
   }
 }
 
+async function runMysqlMigrations(db) {
+  const alters = [
+    "ALTER TABLE hub_settings MODIFY value LONGTEXT",
+    "ALTER TABLE branding_history MODIFY changes LONGTEXT",
+    "ALTER TABLE branding_history MODIFY snapshot LONGTEXT"
+  ];
+  for (const sql of alters) {
+    try {
+      await db.run(sql, []);
+    } catch {
+      // already migrated or column compatible
+    }
+  }
+}
+
 export async function initDb() {
   const url = resolveDbUrl(config.databaseUrl);
   if (url.startsWith("sqlite://")) {
@@ -108,6 +123,7 @@ export async function initDb() {
     throw new Error(`DATABASE_URL invalid: ${url}`);
   }
   await runSchema(state);
+  if (state.dialect === "mysql") await runMysqlMigrations(state);
   return state;
 }
 

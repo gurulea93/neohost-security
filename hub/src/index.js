@@ -16,7 +16,7 @@ import { cacheTelegramBotUsername, startTelegramBot } from "./services/telegram.
 
 const app = express();
 app.use(cors({ origin: "*" }));
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: "4mb" }));
 
 const wsClients = new Map();
 const __filename = fileURLToPath(import.meta.url);

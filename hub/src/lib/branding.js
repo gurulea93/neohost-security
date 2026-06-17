@@ -16,6 +16,15 @@ function hex(v) {
   return /^#[0-9a-fA-F]{6}$/.test(v || "");
 }
 
+function brandingForHistory(b) {
+  const { logo_data: logo, favicon_data: fav, ...rest } = b;
+  return {
+    ...rest,
+    logo_data: logo ? `[${logo.length} chars]` : "",
+    favicon_data: fav ? `[${fav.length} chars]` : ""
+  };
+}
+
 export async function getBranding() {
   const logoMode = LOGO_MODES.has(await getSetting("branding_logo_mode", "both")) ? await getSetting("branding_logo_mode", "both") : "both";
   const preset = await getSetting("branding_accent_preset", "purple");
@@ -92,7 +101,13 @@ export async function updateBranding(data, user = null) {
   }
   await exec(
     "INSERT INTO branding_history (user_id, username, changes, snapshot, created_at) VALUES (?, ?, ?, ?, ?)",
-    [user?.id || null, user?.username || "system", JSON.stringify({ from: before, to: out }), JSON.stringify(out), new Date().toISOString()]
+    [
+      user?.id || null,
+      user?.username || "system",
+      JSON.stringify({ from: brandingForHistory(before), to: brandingForHistory(out) }),
+      JSON.stringify(brandingForHistory(out)),
+      new Date().toISOString()
+    ]
   );
   return out;
 }

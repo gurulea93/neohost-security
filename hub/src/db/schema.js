@@ -265,7 +265,7 @@ function mysqlTables() {
     )`,
     `CREATE TABLE IF NOT EXISTS hub_settings (
       \`key\` VARCHAR(64) PRIMARY KEY,
-      value TEXT
+      value LONGTEXT
     )`,
     `CREATE TABLE IF NOT EXISTS telegram_users (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -325,8 +325,8 @@ function mysqlTables() {
       id INT AUTO_INCREMENT PRIMARY KEY,
       user_id INT NULL,
       username VARCHAR(64) DEFAULT '',
-      changes TEXT,
-      snapshot TEXT,
+      changes LONGTEXT,
+      snapshot LONGTEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS security_templates (
