@@ -1,0 +1,21 @@
+[Unit]
+Description=NeoHost Security Agent
+After=network.target
+Wants=fail2ban.service csf.service nftables.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/neohost-agent
+Environment="HUB_URL=https://security.neohost.md"
+Environment="AGENT_KEY=INLOCUITI-CU-KEY-DIN-DASHBOARD"
+Environment="AGENT_INTERVAL=5"
+ExecStart=/opt/neohost-agent/venv/bin/python agent.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=neohost-agent
+
+[Install]
+WantedBy=multi-user.target
