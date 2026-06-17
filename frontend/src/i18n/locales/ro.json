@@ -89,7 +89,8 @@
   "servers": {
     "addTitle": "Adaugă server nou", "name": "Nume", "hostname": "Hostname",
     "latitude": "Latitudine", "longitude": "Longitudine", "location": "Locație (etichetă)",
-    "edit": "Editează server", "coordsHint": "Coordonate pentru harta atacurilor (ex. 44.4268 / 26.1025)",
+    "edit": "Editează server", "coordsHint": "Coordonatele se detectează automat din hostname/IP sau când agentul se conectează. Opțional: IP public sau domeniu (ex. vps.exemplu.md).",
+    "autoCoords": "auto",
     "modulesHint": "Modulele sunt independente — bifați doar ce aveți instalat pe server.",
     "serversCount": "Servere ({{count}})"
   },

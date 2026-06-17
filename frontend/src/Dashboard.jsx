@@ -126,7 +126,7 @@ export default function Dashboard({ token, apiUrl, onLogout }) {
     return s ? parseInt(s, 10) : null;
   });
   const [newSrv, setNewSrv] = useState({
-    name: "", hostname: "", description: "", latitude: "", longitude: "", location_label: "",
+    name: "", hostname: "", description: "", location_label: "",
     mod_fail2ban: true, mod_csf: true, mod_nftables: true,
   });
   const [editSrv, setEditSrv] = useState(null);
@@ -419,11 +419,7 @@ export default function Dashboard({ token, apiUrl, onLogout }) {
 
   const addServer = async () => {
     if (!newSrv.name.trim()) return;
-    const body = {
-      ...newSrv,
-      latitude: newSrv.latitude === "" ? null : parseFloat(newSrv.latitude),
-      longitude: newSrv.longitude === "" ? null : parseFloat(newSrv.longitude),
-    };
+    const body = { ...newSrv };
     const r = await authFetch("/api/servers", { method: "POST", body: JSON.stringify(body) });
     const d = await r.json();
     if (!r.ok) {
@@ -432,7 +428,7 @@ export default function Dashboard({ token, apiUrl, onLogout }) {
     }
     if (d.server) {
       setAgentKey(d.server.agent_key);
-      setNewSrv({ name: "", hostname: "", description: "", latitude: "", longitude: "", location_label: "", mod_fail2ban: true, mod_csf: true, mod_nftables: true });
+      setNewSrv({ name: "", hostname: "", description: "", location_label: "", mod_fail2ban: true, mod_csf: true, mod_nftables: true });
       await loadServers();
       selectServer(d.server.id);
       showToast(t("dashboard.serverAdded", { name: d.server.name }));
@@ -821,9 +817,7 @@ export default function Dashboard({ token, apiUrl, onLogout }) {
             <h3 className="text-lg font-medium text-foreground mb-4">{t("servers.addTitle")}</h3>
             <div className="flex flex-wrap gap-3 mb-3">
               <input className="form-input flex-1 min-w-[140px]" placeholder={t("servers.name")} value={newSrv.name} onChange={(e) => setNewSrv((p) => ({ ...p, name: e.target.value }))} />
-              <input className="form-input flex-1 min-w-[140px]" placeholder={t("servers.hostname")} value={newSrv.hostname} onChange={(e) => setNewSrv((p) => ({ ...p, hostname: e.target.value }))} />
-              <input className="form-input w-28" type="number" step="any" placeholder={t("servers.latitude")} value={newSrv.latitude} onChange={(e) => setNewSrv((p) => ({ ...p, latitude: e.target.value }))} />
-              <input className="form-input w-28" type="number" step="any" placeholder={t("servers.longitude")} value={newSrv.longitude} onChange={(e) => setNewSrv((p) => ({ ...p, longitude: e.target.value }))} />
+              <input className="form-input flex-1 min-w-[180px]" placeholder={t("servers.hostname")} value={newSrv.hostname} onChange={(e) => setNewSrv((p) => ({ ...p, hostname: e.target.value }))} />
               <button className="btn btn-primary-sm" onClick={addServer}><Icon name="plus" size={14} /> {t("common.add")}</button>
             </div>
             <p className="text-xs text-muted-foreground mb-4">{t("servers.coordsHint")}</p>

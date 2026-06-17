@@ -30,11 +30,11 @@ export function ServerEditModal({ server, onClose, onSave, t }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">{t("servers.latitude")}</label>
-              <input className="form-input w-full" type="number" step="any" placeholder="44.4268" value={form.latitude} onChange={(e) => set("latitude", e.target.value)} />
+              <input className="form-input w-full" type="number" step="any" placeholder={t("servers.autoCoords")} value={form.latitude} onChange={(e) => set("latitude", e.target.value)} />
             </div>
             <div>
               <label className="text-xs text-muted-foreground">{t("servers.longitude")}</label>
-              <input className="form-input w-full" type="number" step="any" placeholder="26.1025" value={form.longitude} onChange={(e) => set("longitude", e.target.value)} />
+              <input className="form-input w-full" type="number" step="any" placeholder={t("servers.autoCoords")} value={form.longitude} onChange={(e) => set("longitude", e.target.value)} />
             </div>
           </div>
           <div>

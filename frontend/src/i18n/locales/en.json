@@ -89,7 +89,8 @@
   "servers": {
     "addTitle": "Add new server", "name": "Name", "hostname": "Hostname",
     "latitude": "Latitude", "longitude": "Longitude", "location": "Location label",
-    "edit": "Edit server", "coordsHint": "Coordinates for attack map (e.g. 44.4268 / 26.1025)",
+    "edit": "Edit server", "coordsHint": "Coordinates are detected automatically from hostname/IP or when the agent connects. Optional: public IP or domain (e.g. vps.example.com).",
+    "autoCoords": "auto",
     "modulesHint": "Modules are independent — enable only what is installed on the server.",
     "serversCount": "Servers ({{count}})"
   },

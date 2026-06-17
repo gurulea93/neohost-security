@@ -12,6 +12,7 @@ import {
 } from "../lib/intelligence.js";
 import { ensureBuiltinTemplates, newUserSlug, templateToDict } from "../lib/securityTemplates.js";
 import { runSecurityAudit } from "../lib/securityAudit.js";
+import { lookupIpGeo, resolveServerLocation } from "../lib/geo.js";
 import {
   cleanupExpiredAuth,
   create2faChallenge,
@@ -87,29 +88,30 @@ function banToDict(b) {
 
 async function getGeo(ip) {
   if (ipGeoCache.has(ip)) return ipGeoCache.get(ip);
-  try {
-    const url = `http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city,isp,org,as,reverse,lat,lon`;
-    const data = await (await fetch(url, { signal: AbortSignal.timeout(4000) })).json();
-    if (data.status === "success") {
-      const geo = {
-        country: data.country || "Unknown",
-        country_code: data.countryCode || "",
-        region: data.regionName || "",
-        city: data.city || "",
-        isp: data.isp || "",
-        org: data.org || "",
-        asn: data.as || "",
-        rdns: data.reverse || "",
-        lat: data.lat || 0,
-        lon: data.lon || 0
-      };
-      ipGeoCache.set(ip, geo);
-      return geo;
-    }
-  } catch {
-    // ignore
+  const geo = await lookupIpGeo(ip);
+  const out = geo
+    ? { country: geo.country, country_code: geo.country_code, region: geo.region, city: geo.city, isp: geo.isp, org: "", asn: "", rdns: "", lat: geo.lat || 0, lon: geo.lon || 0 }
+    : { country: "Unknown", country_code: "", isp: "", org: "", asn: "", rdns: "", lat: 0, lon: 0, region: "", city: "" };
+  ipGeoCache.set(ip, out);
+  return out;
+}
+
+async function applyServerLocation(server, { hostname = "", ip = "", latitude, longitude, location_label } = {}) {
+  const loc = await resolveServerLocation({
+    hostname: hostname || server.hostname,
+    ip,
+    latitude: latitude ?? server.latitude,
+    longitude: longitude ?? server.longitude,
+    location_label: location_label ?? server.location_label
+  });
+  const host = String(hostname || "").trim();
+  const fields = [loc.latitude, loc.longitude, loc.location_label];
+  if (host) {
+    await exec("UPDATE servers SET latitude = ?, longitude = ?, location_label = ?, hostname = ? WHERE id = ?", [...fields, host, server.id]);
+  } else {
+    await exec("UPDATE servers SET latitude = ?, longitude = ?, location_label = ? WHERE id = ?", [...fields, server.id]);
   }
-  return { country: "Unknown", country_code: "", isp: "", org: "", asn: "", rdns: "", lat: 0, lon: 0, region: "", city: "" };
+  return loc;
 }
 
 async function getAbuseScore(ip) {
@@ -214,13 +216,20 @@ export default function createRoutes({ broadcastWs }) {
   r.post("/api/servers", requireAuth, async (req, res) => {
     const name = String(req.body.name || "").trim();
     if (!name) return res.status(400).json({ error: "Numele serverului este obligatoriu" });
+    const hostname = String(req.body.hostname || "").trim();
+    const loc = await resolveServerLocation({
+      hostname,
+      latitude: req.body.latitude ?? null,
+      longitude: req.body.longitude ?? null,
+      location_label: String(req.body.location_label || "").trim()
+    });
     const key = newAgentKey();
     await exec(
       "INSERT INTO servers (name, hostname, description, agent_key, is_active, created_at, mod_fail2ban, mod_csf, mod_nftables, cap_fail2ban, cap_csf, cap_nftables, latitude, longitude, location_label) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?)",
       [
-        name, String(req.body.hostname || "").trim(), String(req.body.description || "").trim(), key, new Date().toISOString(),
+        name, hostname, String(req.body.description || "").trim(), key, new Date().toISOString(),
         req.body.mod_fail2ban !== false ? 1 : 0, req.body.mod_csf !== false ? 1 : 0, req.body.mod_nftables !== false ? 1 : 0,
-        req.body.latitude ?? null, req.body.longitude ?? null, String(req.body.location_label || "").trim().slice(0, 128)
+        loc.latitude, loc.longitude, loc.location_label
       ]
     );
     const server = await queryOne("SELECT * FROM servers WHERE agent_key = ?", [key]);
@@ -244,6 +253,19 @@ export default function createRoutes({ broadcastWs }) {
       longitude: "longitude" in req.body ? req.body.longitude : s.longitude,
       location_label: "location_label" in req.body ? String(req.body.location_label || "").trim().slice(0, 128) : s.location_label
     };
+    const hostnameChanged = "hostname" in req.body && String(req.body.hostname || "").trim() !== String(s.hostname || "").trim();
+    const coordsMissing = patch.latitude == null || patch.longitude == null;
+    if (hostnameChanged || coordsMissing) {
+      const loc = await resolveServerLocation({
+        hostname: patch.hostname,
+        latitude: patch.latitude,
+        longitude: patch.longitude,
+        location_label: patch.location_label
+      });
+      patch.latitude = loc.latitude;
+      patch.longitude = loc.longitude;
+      if (!patch.location_label && loc.location_label) patch.location_label = loc.location_label;
+    }
     await exec("UPDATE servers SET name = ?, hostname = ?, description = ?, is_active = ?, mod_fail2ban = ?, mod_csf = ?, mod_nftables = ?, latitude = ?, longitude = ?, location_label = ? WHERE id = ?", [
       patch.name, patch.hostname, patch.description, patch.is_active, patch.mod_fail2ban, patch.mod_csf, patch.mod_nftables, patch.latitude, patch.longitude, patch.location_label, s.id
     ]);
@@ -264,6 +286,18 @@ export default function createRoutes({ broadcastWs }) {
   r.post("/api/agent/report", requireAgent, async (req, res) => {
     const server = req.server;
     const now = new Date().toISOString();
+    const agentHost = String(req.body.hostname || "").trim();
+    const agentIp = clientIpFromRequest(req);
+    const needsCoords = server.latitude == null || server.longitude == null;
+    if (needsCoords || agentHost) {
+      await applyServerLocation(server, {
+        hostname: agentHost || server.hostname,
+        ip: needsCoords ? agentIp : "",
+        latitude: server.latitude,
+        longitude: server.longitude,
+        location_label: server.location_label
+      });
+    }
     await exec("UPDATE servers SET last_seen = ?, cap_fail2ban = ?, cap_csf = ?, cap_nftables = ? WHERE id = ?", [
       now, req.body.capabilities?.fail2ban ? 1 : 0, req.body.capabilities?.csf ? 1 : 0, req.body.capabilities?.nftables ? 1 : 0, server.id
     ]);
