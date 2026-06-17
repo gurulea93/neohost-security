@@ -10,6 +10,22 @@ const { Pool } = pg;
 
 let state = null;
 
+function toMysqlDatetime(value) {
+  if (value == null) return value;
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 19).replace("T", " ");
+  }
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    return value.slice(0, 19).replace("T", " ");
+  }
+  return value;
+}
+
+function normalizeParams(params, dialect) {
+  if (dialect !== "mysql") return params;
+  return params.map(toMysqlDatetime);
+}
+
 function resolveDbUrl(input) {
   let url = input || "";
   if (!url) {
@@ -64,11 +80,11 @@ export async function initDb() {
       dialect: "mysql",
       client: pool,
       async run(sql, params = []) {
-        const [rows] = await pool.query(sql, params);
+        const [rows] = await pool.query(sql, normalizeParams(params, "mysql"));
         return { rows };
       },
       async exec(sql, params = []) {
-        const [r] = await pool.execute(sql, params);
+        const [r] = await pool.execute(sql, normalizeParams(params, "mysql"));
         return { insertId: Number(r.insertId || 0), changes: Number(r.affectedRows || 0) };
       }
     };
@@ -114,5 +130,9 @@ export async function exec(sql, params = []) {
 }
 
 export function nowIso() {
-  return new Date().toISOString();
+  const d = new Date();
+  if (state?.dialect === "mysql") {
+    return d.toISOString().slice(0, 19).replace("T", " ");
+  }
+  return d.toISOString();
 }
