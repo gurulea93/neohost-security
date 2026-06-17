@@ -273,7 +273,7 @@ export default function createRoutes({ broadcastWs }) {
     }
     if ("connections" in req.body) {
       await upsertSnapshot("connection_snapshots", server.id, now, JSON.stringify(req.body.connections || []));
-      await exec("INSERT INTO connection_metrics (server_id, ts, count) VALUES (?, ?, ?)", [server.id, now, (req.body.connections || []).length]);
+      await exec("INSERT INTO connection_metrics (server_id, ts, `count`) VALUES (?, ?, ?)", [server.id, now, (req.body.connections || []).length]);
     }
     if ("csf" in req.body && server.mod_csf) await upsertSnapshot("csf_snapshots", server.id, now, JSON.stringify(req.body.csf || {}));
     if ("nftables" in req.body && server.mod_nftables) await upsertSnapshot("nftables_snapshots", server.id, now, JSON.stringify(req.body.nftables || {}));
@@ -711,12 +711,12 @@ export default function createRoutes({ broadcastWs }) {
     if ("bot_token" in req.body) {
       const token = String(req.body.bot_token || "").trim();
       if (token) await setSetting("telegram_bot_token", token);
-      else await exec("DELETE FROM hub_settings WHERE key = 'telegram_bot_token'", []);
+      else await exec("DELETE FROM hub_settings WHERE `key` = 'telegram_bot_token'", []);
     }
     if ("webapp_url" in req.body) {
       const url = String(req.body.webapp_url || "").trim().replace(/\/+$/, "");
       if (url) await setSetting("telegram_webapp_url", url);
-      else await exec("DELETE FROM hub_settings WHERE key = 'telegram_webapp_url'", []);
+      else await exec("DELETE FROM hub_settings WHERE `key` = 'telegram_webapp_url'", []);
     }
     const token = await getTelegramBotToken();
     const web = await getTelegramWebAppUrl();

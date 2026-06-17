@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import mysql from "mysql2/promise";
 import pg from "pg";
 import { config } from "../config.js";
@@ -54,6 +53,7 @@ async function runSchema(db) {
 export async function initDb() {
   const url = resolveDbUrl(config.databaseUrl);
   if (url.startsWith("sqlite://")) {
+    const { DatabaseSync } = await import("node:sqlite");
     const filePath = url.replace("sqlite:///", "");
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     const sqlite = new DatabaseSync(filePath);

@@ -139,23 +139,27 @@ async function startup() {
   await initDb();
   await ensureDefaultAdmin();
   await ensureBuiltinTemplates();
-  await cacheTelegramBotUsername();
-  const token = await getTelegramBotToken();
-  const web = await getTelegramWebAppUrl();
-  if (token && web) {
-    try {
-      await fetch(`https://api.telegram.org/bot${token}/setChatMenuButton`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          menu_button: { type: "web_app", text: "Panou NeoHost", web_app: { url: web } }
-        })
-      });
-    } catch {
-      // ignore
+  try {
+    await cacheTelegramBotUsername();
+    const token = await getTelegramBotToken();
+    const web = await getTelegramWebAppUrl();
+    if (token && web) {
+      try {
+        await fetch(`https://api.telegram.org/bot${token}/setChatMenuButton`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            menu_button: { type: "web_app", text: "Panou NeoHost", web_app: { url: web } }
+          })
+        });
+      } catch {
+        // ignore
+      }
     }
+    await startTelegramBot();
+  } catch (err) {
+    console.warn("[NeoHost] Telegram bot dezactivat:", err.message || err);
   }
-  await startTelegramBot();
   setInterval(cleanupOldMetrics, 3600 * 1000).unref();
   if (config.securityApiToken === "schimba-acest-token-secret") {
     console.log("[NeoHost] ATENȚIE: token implicit activ! Setați SECURITY_API_TOKEN.");

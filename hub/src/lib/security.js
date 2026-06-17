@@ -4,14 +4,14 @@ import { exec, queryAll, queryOne } from "../db/index.js";
 import { config } from "../config.js";
 
 export async function getSetting(key, defaultValue = "") {
-  const row = await queryOne("SELECT value FROM hub_settings WHERE key = ?", [key]);
+  const row = await queryOne("SELECT value FROM hub_settings WHERE `key` = ?", [key]);
   return row ? row.value : defaultValue;
 }
 
 export async function setSetting(key, value) {
-  const row = await queryOne("SELECT key FROM hub_settings WHERE key = ?", [key]);
-  if (row) await exec("UPDATE hub_settings SET value = ? WHERE key = ?", [String(value), key]);
-  else await exec("INSERT INTO hub_settings (key, value) VALUES (?, ?)", [key, String(value)]);
+  const row = await queryOne("SELECT `key` FROM hub_settings WHERE `key` = ?", [key]);
+  if (row) await exec("UPDATE hub_settings SET value = ? WHERE `key` = ?", [String(value), key]);
+  else await exec("INSERT INTO hub_settings (`key`, value) VALUES (?, ?)", [key, String(value)]);
 }
 
 export function maskToken(token) {
